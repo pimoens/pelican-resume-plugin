@@ -12,7 +12,7 @@ class ResumeGenerator(CachingGenerator):
     def __init__(self, *args, **kwargs):
         self.about = None
         self.education = []
-        self.experience = {'vocational': [], 'miscellaneous': []}
+        self.experience = {}
         self.publications = []
         self.certificates = []
         self.skills = {}
@@ -50,8 +50,9 @@ class ResumeGenerator(CachingGenerator):
         self._update_context(('about',))
 
     def generate_experience_section(self):
+        base_path = os.path.join(self.settings['RESUME_PATH'], 'experience')
         for f in self.get_files(
-            os.path.join(self.settings['RESUME_PATH'], 'experience')
+            base_path
         ):
             data = self.get_cached_data(f, None)
             if data is None:
@@ -71,11 +72,24 @@ class ResumeGenerator(CachingGenerator):
 
                 self.cache_data(f, data)
 
-            if data.type in self.experience.keys():
-                self.experience[data.type].append(data)
-            for type_ in self.experience.keys():
-                experiences = self.experience[type_]
-                self.experience[type_] = list(sorted(experiences, key=lambda experience: experience.date, reverse=True))
+            tree = f.replace(base_path, '').split('/')[1:-1]
+            tree = [name.replace('-', ' ').replace('_', ' ') for name in tree]
+
+            def add_data_recursive(dict_, tree_, data_):
+                node = tree_[0]
+
+                if node not in dict_.keys():
+                    dict_[node] = {'_items': []}
+
+                if len(tree_) == 1:
+                    dict_[node]['_items'].append(data_)
+                    dict_[node]['_items'] = list(
+                        sorted(dict_[node]['_items'], key=lambda experience: experience.date,
+                               reverse=True))
+                else:
+                    add_data_recursive(dict_[node], tree_[1:], data_)
+
+            add_data_recursive(self.experience, tree, data)
 
         self._update_context(('experience',))
 
