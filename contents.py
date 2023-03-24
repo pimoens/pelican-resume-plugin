@@ -36,13 +36,13 @@ class Certificate(Content):
     default_template = 'resume/publications'
 
 
+class Skill(Content):
+    mandatory_properties = ('title', 'level')
+    default_status = 'published'
+    default_template = 'resume/skills'
+
+
 class Extra(Content):
     mandatory_properties = ('title',)
     default_status = 'published'
     default_template = 'resume/extras'
-
-
-class Skills(Content):
-    mandatory_properties = ('title',)
-    default_status = 'published'
-    default_template = 'resume/skills'

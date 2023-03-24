@@ -2,7 +2,7 @@ import logging
 import os
 from pelican.generators import CachingGenerator
 
-from .contents import About, Education, Experience, Publication, Certificate, Extra, Resume, Skills
+from .contents import About, Education, Experience, Publication, Certificate, Extra, Resume, Skill
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +15,11 @@ class ResumeGenerator(CachingGenerator):
         self.experience = {'vocational': [], 'miscellaneous': []}
         self.publications = []
         self.certificates = []
-        self.skills = []
+        self.skills = {}
         self.extras = []
 
         self.parts = [
-            ('extras', Extra, self.extras),
-            ('skills', Skills, self.skills)
+            ('extras', Extra, self.extras)
         ]
 
         super().__init__(*args, **kwargs)
@@ -161,12 +160,55 @@ class ResumeGenerator(CachingGenerator):
 
         self._update_context(('certificates',))
 
+    def generate_skills_section(self):
+        base_path = os.path.join(self.settings['RESUME_PATH'], 'skills')
+        for f in self.get_files(
+            base_path
+        ):
+            data = self.get_cached_data(f, None)
+            if data is None:
+                try:
+                    data = self.readers.read_file(
+                        base_path=self.path, path=f, content_class=Skill,
+                        context=self.context
+                    )
+                except Exception as e:
+                    logger.error(
+                        'Could not process %s\n%s', f, e,
+                        exc_info=self.settings.get('DEBUG', False))
+                    self._add_failed_source_path(f)
+
+                if not data.is_valid():
+                    self._add_failed_source_path(f)
+
+                self.cache_data(f, data)
+
+            tree = f.replace(base_path, '').split('/')[1:-1]
+            tree = [name.replace('-', ' ').replace('_', ' ') for name in tree]
+
+            def add_data_recursive(dict_, tree_, data_):
+                node = tree_[0]
+
+                if node not in dict_.keys():
+                    dict_[node] = {'_items': []}
+
+                if len(tree_) == 1:
+                    dict_[node]['_items'].append(data_)
+                    dict_[node]['_items'] = list(sorted(dict_[node]['_items'], key=lambda skill: int(skill.level), reverse=True))
+                else:
+                    add_data_recursive(dict_[node], tree_[1:], data_)
+
+            add_data_recursive(self.skills, tree, data)
+
+        self._update_context(('skills',))
+
     def generate_context(self):
         self.generate_about_section()
         self.generate_experience_section()
         self.generate_education_section()
         self.generate_publications_section()
         self.generate_certificates_section()
+        self.generate_skills_section()
 
         for name, cls, list_ in self.parts:
             for f in self.get_files(
@@ -205,7 +247,8 @@ class ResumeGenerator(CachingGenerator):
             'experience': self.experience,
             'education': self.education,
             'publications': self.publications,
-            'certificates': self.certificates
+            'certificates': self.certificates,
+            'skills': self.skills
         }
         for name, cls, list_ in self.parts:
             metadata[name] = list_
